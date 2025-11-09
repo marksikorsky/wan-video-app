@@ -17,7 +17,6 @@ ROOT_DIR = Path("/root/wan-video-app")
 if str(ROOT_DIR) not in sys.path:
 	sys.path.append(str(ROOT_DIR))
 
-from app.models.prompt_optimizer import PromptOptimizer
 from app.models.video_generator import TextToVideoGenerator
 
 
@@ -27,8 +26,7 @@ log = logging.getLogger("tg-bot")
 outputs_dir = ROOT_DIR / "outputs"
 outputs_dir.mkdir(parents=True, exist_ok=True)
 
-# Глобальные объекты (ленивая инициализация может занять время)
-optimizer = PromptOptimizer()
+# Глобальные объекты (инициализация может занять время)
 generator = TextToVideoGenerator()
 
 executor = ThreadPoolExecutor(max_workers=1)
@@ -36,16 +34,16 @@ executor = ThreadPoolExecutor(max_workers=1)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 	await update.message.reply_text(
-		"Привет! Пришлите текстовый промпт — я оптимизирую его через Qwen 7B и сгенерирую видео на WAN 2.2 TI2V‑5B. "
+		"Привет! Пришлите текстовый промпт — я сгенерирую видео на WAN 2.2 TI2V‑5B. "
 		"Генерация может занять несколько минут.\n"
 		"Команды: /status — показать прогресс, /cancel — отменить текущую генерацию."
 	)
 
 
 def _generate_sync(prompt: str) -> Tuple[str, str]:
-	optimized = optimizer.optimize(prompt)
-	video_path = generator.generate(prompt=optimized)
-	return optimized, video_path
+	# Прямая генерация без оптимизации промпта
+	video_path = generator.generate(prompt=prompt)
+	return prompt, video_path
 
 
 def _maybe_compress(path: str, target_mb: int = 48) -> str:
@@ -64,15 +62,18 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 	if not update.message or not update.message.text:
 		return
 	prompt = update.message.text.strip()
+	log.info("handle_text: received message length=%d", len(prompt))
 	if not prompt:
 		return
 	await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
-	await update.message.reply_text("Оптимизирую промпт и запускаю видеогенерацию. Это может занять 5–15 минут…")
+	await update.message.reply_text("Запускаю видеогенерацию. Это может занять 5–15 минут…")
 	try:
+		log.info("handle_text: start generation")
 		optimized, video_path = await asyncio.get_running_loop().run_in_executor(executor, _generate_sync, prompt)
+		log.info("handle_text: generation finished path=%s", video_path)
 		out_path = await asyncio.get_running_loop().run_in_executor(executor, _maybe_compress, video_path)
 		await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.UPLOAD_VIDEO)
-		caption = f"Оптимизированный промпт:\n{optimized}"
+		caption = f"Промпт:\n{optimized}"
 		with open(out_path, "rb") as f:
 			await update.message.reply_video(video=f, caption=caption)
 	except Exception as e:
@@ -91,7 +92,7 @@ def _get_status_text() -> str:
 	for ln in lines:
 		try:
 			pid = int(ln.split()[0])
-			u = subprocess.run(f\"ps -o etimes= -p {pid}\", shell=True, stdout=subprocess.PIPE, text=True)
+			u = subprocess.run(f"ps -o etimes= -p {pid}", shell=True, stdout=subprocess.PIPE, text=True)
 			secs = int((u.stdout or '0').strip() or 0)
 		except Exception:
 			pid, secs = None, 0
@@ -116,32 +117,32 @@ def _get_status_text() -> str:
 		last_file = ""
 	size_line = ""
 	if last_file:
-		size_line = subprocess.run(f\"ls -lh {last_file} 2>/dev/null | awk '{{print $5, $6, $7, $8}}'\", shell=True, stdout=subprocess.PIPE, text=True).stdout.strip()
+		size_line = subprocess.run(f"ls -lh {last_file} 2>/dev/null | awk '{{print $5, $6, $7, $8}}'", shell=True, stdout=subprocess.PIPE, text=True).stdout.strip()
 
 	now = datetime.datetime.utcnow().strftime("%H:%M:%S UTC")
-	text = [f\"Время: {now}\"]
+	text = [f"Время: {now}"]
 	if pids_info:
 		for pid, secs, ln in pids_info[:3]:
-			text.append(f\"Генерация PID {pid}, прошло ~{secs}s\\n{ln}\")
+			text.append(f"Генерация PID {pid}, прошло ~{secs}s\n{ln}")
 	else:
-		text.append(\"Процесс генерации не найден.\")
+		text.append("Процесс генерации не найден.")
 	if gpu:
-		text.append(f\"GPU: {gpu}\")
+		text.append(f"GPU: {gpu}")
 	if last_file:
-		text.append(f\"Последний файл: {last_file} ({size_line})\")
+		text.append(f"Последний файл: {last_file} ({size_line})")
 	if log_tail:
-		text.append(\"Лог:\\n\" + log_tail)
-	return \"\\n\\n\".join(text)
+		text.append("Лог:\n" + log_tail)
+	return "\n\n".join(text)
 
 
 async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 	txt = await asyncio.get_running_loop().run_in_executor(executor, _get_status_text)
-	await update.message.reply_text(txt or \"Нет данных.\")
+	await update.message.reply_text(txt or "Нет данных.")
 
 
 async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-	subprocess.run(\"pkill -f '/root/Wan2.2/generate.py' || true\", shell=True)
-	await update.message.reply_text(\"Отмена отправлена. Проверьте /status через несколько секунд.\")
+	subprocess.run("pkill -f '/root/Wan2.2/generate.py' || true", shell=True)
+	await update.message.reply_text("Отмена отправлена. Проверьте /status через несколько секунд.")
 
 
 def main():

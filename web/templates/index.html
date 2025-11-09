@@ -35,7 +35,6 @@
 		<div id="status"></div>
 		<div id="result" class="hidden">
 			<h2>Результат</h2>
-			<p><strong>Оптимизированный промпт:</strong> <span id="optPrompt"></span></p>
 			<video id="video" controls width="640"></video>
 			<p><a id="downloadLink" href="#" download>Скачать видео</a></p>
 		</div>
@@ -52,7 +51,7 @@
 		form.addEventListener('submit', async (e) => {
 			e.preventDefault();
 			resultEl.classList.add('hidden');
-			statusEl.textContent = 'Оптимизация промпта и генерация видео... это может занять несколько минут.';
+			statusEl.textContent = 'Генерация видео... это может занять несколько минут.';
 			btn.disabled = true;
 			try {
 				const body = {
@@ -72,7 +71,6 @@
 					throw new Error(msg || 'Ошибка генерации');
 				}
 				const data = await res.json();
-				optPromptEl.textContent = data.optimized_prompt || '';
 				videoEl.src = data.video_url;
 				downloadLink.href = data.video_url;
 				downloadLink.download = data.file_name || 'video.mp4';

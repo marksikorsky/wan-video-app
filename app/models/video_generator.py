@@ -2,8 +2,6 @@ import os
 import time
 from typing import Optional
 
-import torch
-
 from app.models.wan_runner import run_wan_ti2v
 
 

@@ -6,7 +6,6 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app.models.prompt_optimizer import PromptOptimizer
 from app.models.video_generator import TextToVideoGenerator
 
 
@@ -36,8 +35,7 @@ class GenerateRequest(BaseModel):
 	fps: Optional[int] = 8
 
 
-# Загружаем модели при старте
-prompt_optimizer = PromptOptimizer()
+# Загружаем генератор при старте
 video_generator = TextToVideoGenerator()
 
 
@@ -54,9 +52,10 @@ async def index():
 async def generate(req: GenerateRequest):
 	if not req.prompt or not req.prompt.strip():
 		raise HTTPException(status_code=400, detail="Пустой промпт")
-	optimized = prompt_optimizer.optimize(req.prompt.strip())
+	# Прямой запуск WAN без оптимизации промпта
+	prompt = req.prompt.strip()
 	save_path = video_generator.generate(
-		prompt=optimized,
+		prompt=prompt,
 		num_inference_steps=req.num_inference_steps or 25,
 		guidance_scale=req.guidance_scale or 6.0,
 		num_frames=req.num_frames or 32,
@@ -67,7 +66,6 @@ async def generate(req: GenerateRequest):
 	video_name = os.path.basename(save_path)
 	return JSONResponse(
 		{
-			"optimized_prompt": optimized,
 			"video_url": f"/outputs/{video_name}",
 			"file_name": video_name,
 		}
