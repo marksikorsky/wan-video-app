@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ru">
+<head>
+	<meta charset="utf-8"/>
+	<meta name="viewport" content="width=device-width, initial-scale=1"/>
+	<title>Видео генерация</title>
+	<link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+	<div class="container">
+		<h1>Генерация видео из текста</h1>
+		<form id="genForm">
+			<label>Промпт</label>
+			<textarea id="prompt" rows="6" placeholder="Опишите, какое видео хотите получить..." required></textarea>
+			<div class="row">
+				<div>
+					<label>Кадров</label>
+					<input type="number" id="num_frames" value="32" min="8" max="64"/>
+				</div>
+				<div>
+					<label>Высота</label>
+					<input type="number" id="height" value="320" step="16"/>
+				</div>
+				<div>
+					<label>Ширина</label>
+					<input type="number" id="width" value="512" step="16"/>
+				</div>
+				<div>
+					<label>FPS</label>
+					<input type="number" id="fps" value="8" min="4" max="24"/>
+				</div>
+			</div>
+			<button type="submit" id="submitBtn">Сгенерировать</button>
+		</form>
+		<div id="status"></div>
+		<div id="result" class="hidden">
+			<h2>Результат</h2>
+			<p><strong>Оптимизированный промпт:</strong> <span id="optPrompt"></span></p>
+			<video id="video" controls width="640"></video>
+			<p><a id="downloadLink" href="#" download>Скачать видео</a></p>
+		</div>
+	</div>
+	<script>
+		const form = document.getElementById('genForm');
+		const statusEl = document.getElementById('status');
+		const resultEl = document.getElementById('result');
+		const videoEl = document.getElementById('video');
+		const optPromptEl = document.getElementById('optPrompt');
+		const downloadLink = document.getElementById('downloadLink');
+		const btn = document.getElementById('submitBtn');
+
+		form.addEventListener('submit', async (e) => {
+			e.preventDefault();
+			resultEl.classList.add('hidden');
+			statusEl.textContent = 'Оптимизация промпта и генерация видео... это может занять несколько минут.';
+			btn.disabled = true;
+			try {
+				const body = {
+					prompt: document.getElementById('prompt').value,
+					num_frames: parseInt(document.getElementById('num_frames').value, 10),
+					height: parseInt(document.getElementById('height').value, 10),
+					width: parseInt(document.getElementById('width').value, 10),
+					fps: parseInt(document.getElementById('fps').value, 10),
+				};
+				const res = await fetch('/api/generate', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(body)
+				});
+				if (!res.ok) {
+					const msg = await res.text();
+					throw new Error(msg || 'Ошибка генерации');
+				}
+				const data = await res.json();
+				optPromptEl.textContent = data.optimized_prompt || '';
+				videoEl.src = data.video_url;
+				downloadLink.href = data.video_url;
+				downloadLink.download = data.file_name || 'video.mp4';
+				resultEl.classList.remove('hidden');
+				statusEl.textContent = 'Готово.';
+			} catch (err) {
+				console.error(err);
+				statusEl.textContent = 'Ошибка: ' + err.message;
+			} finally {
+				btn.disabled = false;
+			}
+		});
+	</script>
+</body>
+</html>
+
+
+

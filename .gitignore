@@ -1,0 +1,24 @@
+# Python / env
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Outputs / runtime
+outputs/
+*.log
+/wan_progress.log
+/wan_wip.log
+
+# Local configs/secrets
+.env
+.env.*
+
+# Heavy external repos / weights (скачиваются при установке)
+/../Wan2.2
+/../Wan2.2-TI2V-5B
+
+# Node/npm (на будущее)
+node_modules/
+
+
